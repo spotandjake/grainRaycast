@@ -1,21 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { List, showToast, Toast } from "@raycast/api";
 import zod from "zod";
 import { algoliasearch, type Algoliasearch } from "algoliasearch";
-import SearchItem, { type SearchResult } from "./SearchItem";
+import SearchItem, { type SearchResult, ResultType } from "./SearchItem";
 // TODO: Look into the Frequency Sorting API
 // Zod Schema
-enum ResultType {
-  lvl0 = "lvl0",
-  lvl1 = "lvl1",
-  lvl2 = "lvl2",
-  lvl3 = "lvl3",
-  lvl4 = "lvl4",
+interface SearchResultHierarchy {
+  [key: string]: SearchResultHierarchy | SearchResult;
 }
 const resultTypeSchema = zod.nativeEnum(ResultType);
 const searchResponseItemSchema = zod.object({
   type: resultTypeSchema,
-  hierarchy: zod.record(resultTypeSchema, zod.string().optional()),
+  anchor: zod.string().optional(),
+  hierarchy: zod.record(resultTypeSchema, zod.string().nullable()),
+  objectID: zod.string(),
   url: zod.string(),
 });
 // Algolia Config
@@ -40,7 +38,6 @@ const searchGrainDocumentation = async (searchClient: Algoliasearch, query: stri
   if (algoliaResponse == undefined) return [];
   const searchResults: SearchResult[] = [];
   for (const rawResponseItem of algoliaResponse.hits) {
-    console.log(rawResponseItem);
     const searchResponseItemResult = searchResponseItemSchema.safeParse(rawResponseItem);
     if (!searchResponseItemResult.success) {
       console.log(searchResponseItemResult.error);
@@ -50,15 +47,15 @@ const searchGrainDocumentation = async (searchClient: Algoliasearch, query: stri
     const searchResponseItem = searchResponseItemResult.data;
     // Build Search Result
     // TODO: Ignore entries like value
-    const responseTitle = searchResponseItem.hierarchy[searchResponseItem.type];
+    const responseType = searchResponseItem.type;
+    const responseTitle = searchResponseItem.anchor || searchResponseItem.hierarchy[responseType];
     if (responseTitle == null) {
       console.log("Failed to find title in Algolia Response Item: ", rawResponseItem);
       continue;
     }
     const responseUrl = searchResponseItem.url;
-    const responseSubTitle = Object.values(searchResponseItem.hierarchy)
-      .filter((n) => n != null)
-      .join(" > ");
+    const responseHierarchy = Object.values(searchResponseItem.hierarchy).filter((v) => v != null);
+    const responseSubTitle = responseHierarchy.join(" > ");
     const responseDocumentPath =
       responseUrl
         .replace(
@@ -68,7 +65,11 @@ const searchGrainDocumentation = async (searchClient: Algoliasearch, query: stri
         .replace(/#.*$/, "") + ".md";
     // Try Build Detail
     searchResults.push({
-      title: responseTitle,
+      // TODO: Better Key
+      id: responseSubTitle,
+      type: responseType,
+      hierarchy: responseHierarchy,
+      title: responseTitle.replaceAll("-", "."),
       subTitle: responseSubTitle,
       url: responseUrl,
       markdownPath: responseDocumentPath,
@@ -86,17 +87,51 @@ export default function Command() {
   // Build List Items
   const search = async (query: string) => {
     setIsLoading(true);
-    setSearchResults(await searchGrainDocumentation(searchClient, query));
+    const searchResults = await searchGrainDocumentation(searchClient, query);
+    setSearchResults(searchResults);
     setIsLoading(false);
   };
   // Generate Search Items
   const searchItems = [];
   for (const searchResult of searchResults) {
-    searchItems.push(<SearchItem searchResult={searchResult} />);
+    searchItems.push(<SearchItem key={searchItems.length.toString()} searchResult={searchResult} />);
   }
+  // Initial Generation Function
+  useEffect(() => {
+    search("");
+  }, []);
+  // TODO: Implement paging
+  // Handle Ordering Of Search Results
+  // const searchResultHierarchy: SearchResultHierarchy = {};
+  // for (const searchResult of searchResults) {
+  //   let currentHierarchy = searchResultHierarchy;
+  //   for (let i = 0; i < searchResult.hierarchy.length; i++) {
+  //     const hierarchyLevel = searchResult.hierarchy[i];
+  //     if (i == searchResult.hierarchy.length - 1) {
+  //       // Inserting Item
+  //       if (currentHierarchy[hierarchyLevel] != undefined) {
+  //         console.log("Duplicate Hierarchy Level: ", searchResult.subTitle);
+  //       }
+  //       currentHierarchy[hierarchyLevel] = searchResult;
+  //     } else {
+  //       // Inserting Hierarchy Level
+  //       let hierarchyIndex = currentHierarchy[hierarchyLevel];
+  //       if (hierarchyIndex == undefined) {
+  //         hierarchyIndex = {};
+  //         currentHierarchy[hierarchyLevel] = hierarchyIndex;
+  //       } else if ((hierarchyIndex as SearchResult).id != undefined) {
+  //         console.log("Hit Unexpected Search Result: ", searchResult.subTitle);
+  //         break;
+  //       } else {
+  //         currentHierarchy = hierarchyIndex as SearchResultHierarchy;
+  //       }
+  //     }
+  //   }
+  // }
   // Generate Search View
   return (
     <List
+      isShowingDetail
       throttle={true}
       isLoading={isLoading || searchResults === undefined}
       onSearchTextChange={async (q: string) => await search(q)}

@@ -1,6 +1,7 @@
 import typescript from "rollup-plugin-typescript2";
 import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
+import json from "@rollup/plugin-json";
 
 export default {
   input: "src/grain.tsx",
@@ -9,5 +10,5 @@ export default {
     format: "esm",
   },
   external: ["react", "React"],
-  plugins: [typescript(), commonjs(), nodeResolve({ modulesOnly: false, exportConditions: ["node"] })],
+  plugins: [typescript(), json(), commonjs(), nodeResolve({ modulesOnly: false, exportConditions: ["node"] })],
 };

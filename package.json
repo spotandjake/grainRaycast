@@ -3,7 +3,7 @@
   "name": "grainraycast",
   "title": "GrainRaycast",
   "description": "Allows you to search the Grain Lang documentation from Raycast.",
-  "icon": "extension-icon.png",
+  "icon": "Grain.png",
   "author": "spotandjake",
   "categories": [
     "Developer Tools"
@@ -21,11 +21,17 @@
   ],
   "dependencies": {
     "@raycast/api": "^1.85.1",
-    "@raycast/utils": "^1.17.0"
+    "@raycast/utils": "^1.17.0",
+    "@types/mdast": "^4.0.4",
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-gfm-table": "^2.0.0",
+    "mdast-util-to-markdown": "^2.1.2",
+    "micromark-extension-gfm-table": "^2.1.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.11",
     "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^15.3.0",
     "@types/node": "20.8.10",
     "@types/react": "18.3.3",
@@ -41,11 +47,10 @@
   "scripts": {
     "bundle": "rollup -c",
     "bundle:watch": "rollup -c -w",
-    "build": "npm run bundle && ray build",
-    "dev": "concurrently \"npm run bundle:watch\" \"ray develop\"",
+    "build": "yarn bundle && ray build",
+    "dev": "concurrently \"yarn bundle:watch\" \"ray develop\"",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
-    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
     "publish": "npx @raycast/api@latest publish"
   }
 }
