@@ -1,5 +1,5 @@
 import require$$0$1, { useState, useEffect } from 'react';
-import require$$0$3, { List, Color, Icon, ActionPanel, Action, Detail, showToast, Toast } from '@raycast/api';
+import require$$0$3, { List, Color, ActionPanel, Action, Detail, showToast, Toast } from '@raycast/api';
 import http from 'http';
 import https from 'https';
 import Url, { URL as URL$3 } from 'url';
@@ -117963,11 +117963,9 @@ function SearchItem({ searchResult }) {
         setDetailData(markdownContent);
     }, [data]);
     // Search Item
-    return (jsxRuntimeExports.jsx(List.Item, { 
-        // TODO: Consider Icon
-        icon: Icon.CodeBlock, title: searchResult.title, subtitle: searchResult.subTitle, 
+    return (jsxRuntimeExports.jsx(List.Item, { title: searchResult.title, subtitle: searchResult.subTitle, 
         // TODO: Improve Actions
-        detail: jsxRuntimeExports.jsx(List.Item.Detail, { isLoading: isLoading, metadata: metaData != undefined && jsxRuntimeExports.jsx(List.Item.Detail.Metadata, { children: metaData }) }), actions: jsxRuntimeExports.jsx(ActionPanel, { children: jsxRuntimeExports.jsx(Action.Push, { title: "Show Details", target: jsxRuntimeExports.jsx(Detail, { markdown: detailData }) }) }) }, searchResult.id));
+        detail: detailData != undefined && (jsxRuntimeExports.jsx(List.Item.Detail, { isLoading: isLoading, markdown: metaData == undefined ? detailData : undefined, metadata: metaData != undefined && jsxRuntimeExports.jsx(List.Item.Detail.Metadata, { children: metaData }) })), actions: jsxRuntimeExports.jsx(ActionPanel, { children: jsxRuntimeExports.jsx(Action.Push, { title: "Show Details", target: jsxRuntimeExports.jsx(Detail, { markdown: detailData }) }) }) }, searchResult.id));
 }
 
 const resultTypeSchema = z.nativeEnum(ResultType);
@@ -117976,7 +117974,7 @@ const searchResponseItemSchema = z.object({
     anchor: z.string().optional(),
     hierarchy: z.record(resultTypeSchema, z.string().nullable()),
     objectID: z.string(),
-    url: z.string(),
+    url_without_anchor: z.string(),
 });
 // Algolia Config
 const algoliaConfig = {
@@ -117997,7 +117995,7 @@ const searchGrainDocumentation = async (searchClient, query) => {
         return undefined;
     });
     if (algoliaResponse == undefined)
-        return [];
+        return undefined;
     const searchResults = [];
     for (const rawResponseItem of algoliaResponse.hits) {
         const searchResponseItemResult = searchResponseItemSchema.safeParse(rawResponseItem);
@@ -118010,17 +118008,20 @@ const searchGrainDocumentation = async (searchClient, query) => {
         // Build Search Result
         // TODO: Ignore entries like value
         const responseType = searchResponseItem.type;
-        const responseTitle = searchResponseItem.anchor || searchResponseItem.hierarchy[responseType];
-        if (responseTitle == null) {
+        const _responseTitle = searchResponseItem.anchor || searchResponseItem.hierarchy[responseType];
+        if (_responseTitle == null) {
             console.log("Failed to find title in Algolia Response Item: ", rawResponseItem);
             continue;
         }
-        const responseUrl = searchResponseItem.url;
+        const responseTitle = _responseTitle.trim();
+        const responseUrl = searchResponseItem.url_without_anchor;
         const responseHierarchy = Object.values(searchResponseItem.hierarchy).filter((v) => v != null);
-        const responseSubTitle = responseHierarchy.join(" > ");
-        const responseDocumentPath = responseUrl
-            .replace("https://grain-lang.org/docs/stdlib/", "https://raw.githubusercontent.com/grain-lang/grain/refs/heads/main/stdlib/")
-            .replace(/#.*$/, "") + ".md";
+        const responseSubTitle = responseHierarchy.slice(1).join(" > ");
+        const responseDocumentPath = responseUrl.replace("https://grain-lang.org/docs/stdlib/", "https://raw.githubusercontent.com/grain-lang/grain/refs/heads/main/stdlib/") + ".md";
+        // Filter Out Unwanted Results
+        if (["all-content-wrapper", "Values"].includes(responseTitle)) {
+            continue;
+        }
         // Try Build Detail
         searchResults.push({
             // TODO: Better Key
@@ -118033,12 +118034,66 @@ const searchGrainDocumentation = async (searchClient, query) => {
             markdownPath: responseDocumentPath,
         });
     }
-    return searchResults;
+    // Build Search Hierarchy
+    const searchResultHierarchy = { type: "SearchResultHierarchy", title: "Root", children: {} };
+    for (const searchResult of searchResults.reverse()) {
+        let currentHierarchy = searchResultHierarchy;
+        for (let i = 0; i < searchResult.hierarchy.length; i++) {
+            const hierarchyLevel = searchResult.hierarchy[i];
+            if (i == searchResult.hierarchy.length - 1) {
+                // Inserting Item
+                if (currentHierarchy.children[hierarchyLevel] != undefined) {
+                    continue;
+                }
+                currentHierarchy.children[hierarchyLevel] = searchResult;
+            }
+            else {
+                // Inserting Hierarchy Level
+                let hierarchyIndex = currentHierarchy.children[hierarchyLevel];
+                if (hierarchyIndex == undefined) {
+                    hierarchyIndex = { type: "SearchResultHierarchy", title: hierarchyLevel, children: {} };
+                    currentHierarchy.children[hierarchyLevel] = hierarchyIndex;
+                }
+                else if (hierarchyIndex.type != "SearchResultHierarchy") {
+                    console.log("Hit Unexpected Search Result: ", searchResult.subTitle);
+                    break;
+                }
+                else {
+                    currentHierarchy = hierarchyIndex;
+                }
+            }
+        }
+    }
+    return searchResultHierarchy;
 };
+function SearchHierarchy({ id, searchResultHierarchy, isRoot }) {
+    if (searchResultHierarchy == undefined)
+        return [];
+    const searchItems = [];
+    const containsSearchResults = Object.values(searchResultHierarchy.children).some((v) => v.id != undefined);
+    for (const [title, value] of Object.entries(searchResultHierarchy.children)) {
+        const childKey = `${id} > ${title}`;
+        if (value.type != "SearchResultHierarchy") {
+            searchItems.push(jsxRuntimeExports.jsx(SearchItem, { searchResult: value }, childKey));
+        }
+        else if (isRoot && containsSearchResults && !["Documentation", "Root"].includes(searchResultHierarchy.title)) {
+            // TODO: use action panel to allow navigation of the hierarchy
+            searchItems.push(jsxRuntimeExports.jsx(List.Section, { title: searchResultHierarchy.title, children: jsxRuntimeExports.jsx(SearchHierarchy, { id: childKey, searchResultHierarchy: value, isRoot: false }, childKey) }, childKey));
+        }
+        else {
+            // TODO: Make Header Better
+            if (containsSearchResults && !["Values", "Root", "Documentation"].includes(searchResultHierarchy.title))
+                searchItems.push(jsxRuntimeExports.jsx(List.Item, { title: searchResultHierarchy.title }, `${childKey}--Title`));
+            searchItems.push(jsxRuntimeExports.jsx(SearchHierarchy, { id: childKey, searchResultHierarchy: value, isRoot: isRoot }, childKey));
+        }
+    }
+    return searchItems;
+}
 function Command() {
     // TODO: Investigate the useNavigation API with the hierarchy levels
+    // TODO: Implement Pagination
     // Hooks
-    const [searchResults, setSearchResults] = useState([]);
+    const [searchResults, setSearchResults] = useState(undefined);
     const [isLoading, setIsLoading] = useState(false);
     // Create A new Algolia Client
     const searchClient = algoliasearch(algoliaConfig.appId, algoliaConfig.apiKey);
@@ -118049,48 +118104,13 @@ function Command() {
         setSearchResults(searchResults);
         setIsLoading(false);
     };
-    // Generate Search Items
-    const searchItems = [];
-    for (const searchResult of searchResults) {
-        searchItems.push(jsxRuntimeExports.jsx(SearchItem, { searchResult: searchResult }, searchItems.length.toString()));
-    }
     // Initial Generation Function
     useEffect(() => {
         search("");
     }, []);
-    // TODO: Implement paging
-    // Handle Ordering Of Search Results
-    const searchResultHierarchy = {};
-    for (const searchResult of searchResults) {
-        let currentHierarchy = searchResultHierarchy;
-        for (let i = 0; i < searchResult.hierarchy.length; i++) {
-            const hierarchyLevel = searchResult.hierarchy[i];
-            if (i == searchResult.hierarchy.length - 1) {
-                // Inserting Item
-                if (currentHierarchy[hierarchyLevel] != undefined) {
-                    console.log("Duplicate Hierarchy Level: ", searchResult.subTitle);
-                }
-                currentHierarchy[hierarchyLevel] = searchResult;
-            }
-            else {
-                // Inserting Hierarchy Level
-                let hierarchyIndex = currentHierarchy[hierarchyLevel];
-                if (hierarchyIndex == undefined) {
-                    hierarchyIndex = {};
-                    currentHierarchy[hierarchyLevel] = hierarchyIndex;
-                }
-                else if (hierarchyIndex.id != undefined) {
-                    console.log("Hit Unexpected Search Result: ", searchResult.subTitle);
-                    break;
-                }
-                else {
-                    currentHierarchy = hierarchyIndex;
-                }
-            }
-        }
-    }
     // Generate Search View
-    return (jsxRuntimeExports.jsx(List, { isShowingDetail: true, throttle: true, isLoading: isLoading || searchResults === undefined, onSearchTextChange: async (q) => await search(q), children: searchItems }));
+    // console.log(searchResults);
+    return (jsxRuntimeExports.jsx(List, { isShowingDetail: true, throttle: true, isLoading: isLoading || searchResults === undefined, onSearchTextChange: async (q) => await search(q), children: jsxRuntimeExports.jsx(SearchHierarchy, { id: "Root", searchResultHierarchy: searchResults, isRoot: true }, "Root") }));
 }
 
 export { Command as default };

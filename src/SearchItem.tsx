@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ActionPanel, Detail, List, Action, Icon, Color } from "@raycast/api";
+import { ActionPanel, Detail, List, Action, Color } from "@raycast/api";
 import { useFetch } from "@raycast/utils";
 import zod from "zod";
 import { gfmTable } from "micromark-extension-gfm-table";
@@ -140,16 +140,17 @@ export default function SearchItem({ searchResult }: { key: string; searchResult
   return (
     <List.Item
       key={searchResult.id}
-      // TODO: Consider Icon
-      icon={Icon.CodeBlock}
       title={searchResult.title}
       subtitle={searchResult.subTitle}
       // TODO: Improve Actions
       detail={
-        <List.Item.Detail
-          isLoading={isLoading}
-          metadata={metaData != undefined && <List.Item.Detail.Metadata>{metaData}</List.Item.Detail.Metadata>}
-        />
+        detailData != undefined && (
+          <List.Item.Detail
+            isLoading={isLoading}
+            markdown={metaData == undefined ? detailData : undefined}
+            metadata={metaData != undefined && <List.Item.Detail.Metadata>{metaData}</List.Item.Detail.Metadata>}
+          />
+        )
       }
       actions={
         <ActionPanel>
