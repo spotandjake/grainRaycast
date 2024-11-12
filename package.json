@@ -9,9 +9,10 @@
     "Developer Tools"
   ],
   "license": "MIT",
+  "type": "module",
   "commands": [
     {
-      "name": "grain",
+      "name": "grain-search",
       "title": "Grain",
       "subtitle": "search",
       "description": "Allows you to search the Grain Lang documentation from Raycast.",
@@ -20,21 +21,28 @@
   ],
   "dependencies": {
     "@raycast/api": "^1.85.1",
-    "@raycast/utils": "^1.17.0",
-    "algoliasearch": "^5.13.0",
-    "zod": "^3.23.8"
+    "@raycast/utils": "^1.17.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.11",
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-node-resolve": "^15.3.0",
     "@types/node": "20.8.10",
     "@types/react": "18.3.3",
+    "algoliasearch": "^5.13.0",
+    "concurrently": "^9.1.0",
     "eslint": "^8.57.0",
     "prettier": "^3.3.3",
-    "typescript": "^5.4.5"
+    "rollup": "^4.25.0",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typescript": "^5.6.3",
+    "zod": "^3.23.8"
   },
   "scripts": {
-    "build": "ray build",
-    "dev": "ray develop",
+    "bundle": "rollup -c",
+    "bundle:watch": "rollup -c -w",
+    "build": "npm run bundle && ray build",
+    "dev": "concurrently \"npm run bundle:watch\" \"ray develop\"",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
     "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",

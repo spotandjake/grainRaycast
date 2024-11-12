@@ -3,7 +3,7 @@ import { List, showToast, Toast } from "@raycast/api";
 import zod from "zod";
 import { algoliasearch, type Algoliasearch } from "algoliasearch";
 import SearchItem, { type SearchResult } from "./SearchItem";
-
+// TODO: Look into the Frequency Sorting API
 // Zod Schema
 enum ResultType {
   lvl0 = "lvl0",
