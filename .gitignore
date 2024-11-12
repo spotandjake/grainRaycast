@@ -10,7 +10,7 @@ raycast-env.d.ts
 compiled_raycast_swift
 
 # Grain Raycast Files
-./src/*.jsx
+src/*.jsx
 
 # misc
 .DS_Store
